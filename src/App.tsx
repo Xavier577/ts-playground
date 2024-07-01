@@ -1,6 +1,7 @@
 import Editor, { Monaco } from "@monaco-editor/react";
 import { editor } from "monaco-editor";
 import { useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/tauri";
 import ts, { ScriptTarget } from "typescript";
 
 const PlayIcon = () => {
@@ -37,9 +38,10 @@ const TsLogo = () => {
 };
 
 function App() {
-  const [editorValue, setEditorValue] = useState("");
+  const [, setEditorValue] = useState("");
 
   const editorRef = useRef<typeof Editor>(null);
+  const [output, setOutput] = useState("");
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleEditorDidMount(
@@ -49,6 +51,19 @@ function App() {
     Object.assign(editorRef, { current: editor });
 
     return monaco;
+  }
+
+  //  const [shouldResize, setShouldResize] = useState(false);
+  const resizableDivRef = useRef<HTMLDivElement>(null);
+
+  async function runCode(code: string) {
+    try {
+      const result = await invoke("run_ts_code", { code });
+      setOutput(result as string);
+    } catch (error) {
+      setOutput(error as string);
+      console.error(error);
+    }
   }
 
   return (
@@ -62,22 +77,45 @@ function App() {
       <div className="h-[50px] bg-[#262626] px-5 flex items-center justify-between">
         <span className="text-[20px] text-white">Playground</span>
         <span
-          className="text-[16px] text-white"
+          className="cursor-pointer"
           onClick={() => {
             setEditorValue(
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (editorRef?.current as any)?.getValue?.() as string
             );
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            runCode((editorRef.current as any)?.getValue?.() as string);
           }}
         >
           <PlayIcon />
         </span>
       </div>
-      <section className="h-[calc(100vh-100px)] bg-[#444] flex overflow-hidden">
-        <div className="h-full w-[50%] flex-shrink-0 overflow-auto resize-x pr-2">
+      <section className="h-[calc(100vh-100px)] bg-[#444] flex">
+        <div
+          ref={resizableDivRef}
+          className="h-full w-[50%] flex-shrink-0 overflow-auto resize-x"
+          // onMouseDown={() => setShouldResize(true)}
+          // onMouseMove={(e) => {
+          //   if (!shouldResize) return;
+
+          //   if (resizableDivRef.current != null) {
+          //     const width =
+          //       e.clientX -
+          //       resizableDivRef.current.getBoundingClientRect().left;
+
+          //     const adjustedWidth = width * 2;
+
+          //     if (adjustedWidth > 10) {
+          //       resizableDivRef.current.style.width = adjustedWidth + "px";
+          //     }
+          //   }
+          // }}
+          // onMouseUp={() => setShouldResize(false)}
+        >
           <Editor
             height="100%"
-            width="100.%"
+            width="100%"
             defaultLanguage="typescript"
             onMount={handleEditorDidMount}
             theme="vs-dark"
@@ -85,9 +123,36 @@ function App() {
           />
         </div>
 
-        <pre className="h-full w-[50%] flex-grow-2 bg-[#353434] font-mono text-green-400">
-          {ts.transpile(editorValue, { target: ScriptTarget.ES2015 })}
-        </pre>
+        <div className="h-full w-[50%] bg-[#353434] pb-10">
+          <div className="flex flex-row-reverse gap-5 px-5">
+            <span
+              className="text-white cursor-pointer"
+              onClick={() => setOutput("")}
+            >
+              clear
+            </span>
+            <span
+              className="text-white cursor-pointer"
+              onClick={() => {
+                setOutput(
+                  ts.transpile(
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (editorRef?.current as any)?.getValue?.() as string,
+                    { target: ScriptTarget.ES2015 }
+                  )
+                );
+              }}
+            >
+              compile
+            </span>
+          </div>
+          <pre className="h-full w-full flex-grow-2 font-mono text-green-400 overflow-y-auto">
+            {output}
+          </pre>
+        </div>
+        {/* <pre className="h-full w-[50%] flex-grow-2 bg-[#353434] font-mono text-green-400 overflow-y-auto">
+          {codeOutput}
+        </pre> */}
       </section>
     </main>
   );
